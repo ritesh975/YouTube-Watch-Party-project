@@ -132,7 +132,7 @@ Keep both terminals running while using the application.
 - Add better connection recovery and error handling.
 - Improve accessibility and mobile user experience.
 
-## 👨‍💻 Author
+## 👨‍💻 RITESH KUMAR KASAUDHAN
 
 **Your Name**
 
