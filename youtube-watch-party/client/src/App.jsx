@@ -4,7 +4,7 @@ import { io } from 'socket.io-client';
 import YouTube from 'react-youtube';
 import './style.css';
 
-const socket = io('http://localhost:3000');
+const socket = io('https://youtube-watch-party-project.onrender.com');
 
 function App() {
   const [username, setUsername] = useState('');
