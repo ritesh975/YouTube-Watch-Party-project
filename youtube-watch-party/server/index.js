@@ -7,14 +7,22 @@ const { Server } = require('socket.io');
 const app = express();
 const server = http.createServer(app);
 
-app.use(cors());
+// Frontend URLs allowed to connect to this backend.
+const allowedOrigins = [
+  'http://localhost:5173',
+  process.env.CLIENT_URL,
+];
+
+const corsOptions = {
+  origin: allowedOrigins.filter(Boolean),
+  methods: ['GET', 'POST'],
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 const io = new Server(server, {
-  cors: {
-    origin: 'http://localhost:5173',
-    methods: ['GET', 'POST'],
-  },
+  cors: corsOptions,
 });
 
 const rooms = new Map();
@@ -53,7 +61,13 @@ function getYouTubeVideoId(value) {
     ) {
       id = url.pathname.split('/').filter(Boolean)[0];
     } else if (
-      ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtube-nocookie.com', 'www.youtube-nocookie.com'].includes(url.hostname)
+      [
+        'youtube.com',
+        'www.youtube.com',
+        'm.youtube.com',
+        'youtube-nocookie.com',
+        'www.youtube-nocookie.com',
+      ].includes(url.hostname)
     ) {
       if (url.pathname === '/watch') {
         id = url.searchParams.get('v');
@@ -122,6 +136,7 @@ io.on('connection', (socket) => {
 
   socket.data.roomId = null;
 
+  // Create a new room.
   socket.on('create_room', ({ username } = {}, callback) => {
     if (typeof username !== 'string' || !username.trim()) {
       return sendError(callback, 'Username is required.');
@@ -166,6 +181,7 @@ io.on('connection', (socket) => {
     console.log('Room created:', roomId);
   });
 
+  // Join an existing room.
   socket.on('join_room', ({ roomId, username } = {}, callback) => {
     const id =
       typeof roomId === 'string' ? roomId.trim().toUpperCase() : '';
@@ -206,7 +222,7 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Existing frontend event: change_video
+  // Change the YouTube video.
   socket.on('change_video', ({ roomId, videoId } = {}, callback) => {
     const currentRoomId = socket.data.roomId;
     const room = rooms.get(currentRoomId);
@@ -226,7 +242,10 @@ io.on('connection', (socket) => {
     const validVideoId = getYouTubeVideoId(videoId);
 
     if (!validVideoId) {
-      return sendError(callback, 'Please enter a valid YouTube video URL or ID.');
+      return sendError(
+        callback,
+        'Please enter a valid YouTube video URL or ID.'
+      );
     }
 
     room.videoId = validVideoId;
@@ -248,38 +267,45 @@ io.on('connection', (socket) => {
     callback?.({ success: true, videoId: room.videoId });
   });
 
-  // Existing frontend event: sync_playback
-  socket.on('sync_playback', ({ roomId, currentTime, isPlaying } = {}, callback) => {
-    const currentRoomId = socket.data.roomId;
-    const room = rooms.get(currentRoomId);
-    const user = room?.participants.get(socket.id);
+  // Synchronize playback state.
+  socket.on(
+    'sync_playback',
+    ({ roomId, currentTime, isPlaying } = {}, callback) => {
+      const currentRoomId = socket.data.roomId;
+      const room = rooms.get(currentRoomId);
+      const user = room?.participants.get(socket.id);
 
-    if (!room || !user || currentRoomId !== roomId) {
-      return sendError(callback, 'You are not in this room.');
+      if (!room || !user || currentRoomId !== roomId) {
+        return sendError(callback, 'You are not in this room.');
+      }
+
+      if (!canControl(user)) {
+        return sendError(callback, 'You cannot control playback.');
+      }
+
+      const time = Number(currentTime);
+
+      if (
+        !Number.isFinite(time) ||
+        time < 0 ||
+        typeof isPlaying !== 'boolean'
+      ) {
+        return sendError(callback, 'Invalid playback state.');
+      }
+
+      room.currentTime = time;
+      room.isPlaying = isPlaying;
+
+      socket.to(currentRoomId).emit('playback_changed', {
+        currentTime: room.currentTime,
+        isPlaying: room.isPlaying,
+      });
+
+      callback?.({ success: true });
     }
+  );
 
-    if (!canControl(user)) {
-      return sendError(callback, 'You cannot control playback.');
-    }
-
-    const time = Number(currentTime);
-
-    if (!Number.isFinite(time) || time < 0 || typeof isPlaying !== 'boolean') {
-      return sendError(callback, 'Invalid playback state.');
-    }
-
-    room.currentTime = time;
-    room.isPlaying = isPlaying;
-
-    socket.to(currentRoomId).emit('playback_changed', {
-      currentTime: room.currentTime,
-      isPlaying: room.isPlaying,
-    });
-
-    callback?.({ success: true });
-  });
-
-  // General playback controls: play, pause, seek, change_video
+  // General playback controls: play, pause, seek, change_video.
   socket.on('playback_action', (action = {}, callback) => {
     const roomId = socket.data.roomId;
     const room = rooms.get(roomId);
@@ -318,7 +344,10 @@ io.on('connection', (socket) => {
       const validVideoId = getYouTubeVideoId(action.videoId);
 
       if (!validVideoId) {
-        return sendError(callback, 'Please provide a valid YouTube video URL or ID.');
+        return sendError(
+          callback,
+          'Please provide a valid YouTube video URL or ID.'
+        );
       }
 
       room.videoId = validVideoId;
@@ -348,7 +377,7 @@ io.on('connection', (socket) => {
     callback?.({ success: true });
   });
 
-  // Only the Host can assign or change non-Host roles.
+  // Only the Host can assign roles.
   socket.on('assign_role', ({ userId, role } = {}, callback) => {
     const roomId = socket.data.roomId;
     const room = rooms.get(roomId);
@@ -416,11 +445,13 @@ io.on('connection', (socket) => {
     callback?.({ success: true });
   });
 
+  // Leave the current room.
   socket.on('leave_room', (callback) => {
     leaveCurrentRoom(socket);
     callback?.({ success: true });
   });
 
+  // Handle disconnections.
   socket.on('disconnect', () => {
     leaveCurrentRoom(socket);
     console.log('Disconnected:', socket.id);
@@ -430,5 +461,5 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
