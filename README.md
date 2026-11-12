@@ -16,184 +16,105 @@ YouTube Watch Party is a real-time web application built with React, Node.js, Ex
 
 The application supports multiple participants, host and moderator permissions, video sharing, participant management, and room-leaving notifications.
 
-## 🏗️ System Architecture
+## 🏗️ Architecture
 
-YouTube Watch Party follows a **Client-Server Architecture** with real-time communication using Socket.IO. The React frontend manages the user interface and YouTube player, while the Node.js and Express backend handles room management, participant information, permissions, and real-time events.
+### System Architecture
 
-### Architecture Diagram
+YouTube Watch Party follows a Client–Server Architecture with real-time communication using Socket.IO. The React frontend manages the user interface and YouTube player, while the Node.js and Express backend handles room management, participants, permissions, and real-time events.
 
-```text
-                 👥 USERS / PARTICIPANTS
-                    /             \
-                   /               \
-              Host Browser     User Browser
-                   \               /
-                    \             /
-                React Frontend (Vite)
-                       |
-              App.jsx / main.jsx
-                       |
-              YouTube Video Player
-                       |
-                Socket.IO Client
-                       |
-             Real-Time Communication
-                       |
-              Node.js + Express
-                       |
-               Socket.IO Server
-                  (index.js)
-                       |
-         ┌─────────────┼─────────────┐
-         |             |             |
-    Room Manager   User Manager   Event Handler
-         |             |             |
-    Create Room    Participants   Video Events
-    Join Room      User Roles     Play / Pause
-    Leave Room     Host/Mod       Video Changes
-         |             |             |
-         └─────────────┼─────────────┘
-                       |
-              Room-Based Broadcast
-                       |
-          ┌────────────┼────────────┐
-          |            |            |
-       Host UI    Participant UI  Moderator UI
-          |            |            |
-          └────────────┼────────────┘
-                       |
-              YouTube Video Sync
+```mermaid
+flowchart TD
+    A[Users / Participants] --> B[Browser]
+    B --> C[React SPA on Vite]
+    C --> D[App.jsx - UI and State]
+    C --> E[Socket.IO Client]
+    C --> F[YouTube Player]
+
+    E <-->|Real-Time Events| G[Socket.IO Server]
+    G --> H[Node.js + Express Server]
+    H --> I[Room Management]
+    H --> J[Participant Management]
+    H --> K[Role and Permission Management]
+
+    I --> L[Create / Join / Leave Room]
+    J --> M[Host / Moderator / Participant]
+    K --> N[Video and Playback Authorization]
+
+    L --> O[(Room State)]
+    M --> O
+    N --> O
+    O --> G
+    G --> P[Room-Based Broadcasting]
+    P --> Q[Connected Participants]
+    Q --> R[Synchronized YouTube Playback]
 ```
 
-### 🔄 Complete Application Workflow
+### Application Lifecycle
 
-#### 1. Frontend Initialization
+```mermaid
+flowchart TD
+    A[APPLICATION START] --> B[CREATE ROOM]
+    B --> C[GENERATE ROOM CODE]
+    C --> D[HOST JOINS ROOM]
+    D --> E[PARTICIPANTS JOIN]
+    E --> F[SHARE YOUTUBE VIDEO]
+    F --> G[SYNCHRONIZE PLAYBACK]
 
-- `main.jsx` initializes the React application.
-- `App.jsx` manages the main user interface and application state.
-- `style.css` provides the responsive dark-themed UI.
-- Socket.IO Client connects the frontend to the backend server.
+    G --> H{USER ACTION}
+    H -->|Play / Pause| I[BROADCAST PLAYBACK]
+    H -->|Change Video| J[UPDATE SHARED VIDEO]
+    H -->|Promote User| K[UPDATE USER ROLE]
+    H -->|Remove User| L[REMOVE PARTICIPANT]
+    H -->|Leave Room| M[UPDATE ROOM MEMBERS]
 
-#### 2. Room Creation
-
-- The Host enters a username and clicks Create Room.
-- The frontend sends a room creation event to the backend.
-- The backend generates a unique room code.
-- The Host is assigned the Host role.
-- The Host joins the Socket.IO room.
-- The room information is sent back to the frontend.
-
-#### 3. Joining a Room
-
-- A participant enters their username and room code.
-- The frontend sends a Join Room event to the server.
-- The backend validates the room code.
-- The participant is added to the room.
-- The server sends the current room information and participant list.
-- The updated participant list is broadcast to connected users.
-
-#### 4. YouTube Video Synchronization
-
-- The Host or Moderator enters a YouTube video URL.
-- The frontend processes the video ID.
-- A video change event is sent through Socket.IO.
-- The backend updates the room's video information.
-- The server broadcasts the new video information to room participants.
-- Each participant's YouTube player loads the shared video.
-
-#### 5. Play and Pause Synchronization
-
-- The Host or Moderator clicks Play or Pause.
-- The frontend sends a playback event to the backend.
-- The backend checks the user's permission.
-- The server broadcasts the playback event to connected participants.
-- The YouTube players respond to the synchronized event.
-
-#### 6. Role and Participant Management
-
-- The Host can promote participants to Moderator.
-- The backend updates the participant's role.
-- The updated participant information is broadcast to the room.
-- The Host can remove participants.
-- Removed participants receive a notification and lose access to the room.
-
-#### 7. User Disconnection
-
-- When a participant leaves, the backend updates the participant list.
-- Other participants receive the updated room information.
-- When the Host disconnects, the server notifies the remaining participants.
-- The room management logic handles the Host disconnect situation.
-
-### 📊 Data Flow Architecture
-
-```text
-User Action
-    |
-    v
-React Component (App.jsx)
-    |
-    v
-Socket.IO Client
-    |
-    v
-Node.js Backend (index.js)
-    |
-    v
-Socket.IO Event Handler
-    |
-    v
-Room & Permission Logic
-    |
-    v
-Socket.IO Broadcast
-    |
-    v
-Connected Participants
-    |
-    v
-React UI Update
-    |
-    v
-YouTube Player Synchronization
+    I --> G
+    J --> G
+    K --> G
+    L --> G
+    M --> N[ROOM UPDATE]
+    N --> O[APPLICATION END]
 ```
 
-### 🧩 Main Components and Responsibilities
+### Real-Time Communication Flow
+
+```mermaid
+sequenceDiagram
+    participant H as Host
+    participant C as React Client
+    participant S as Socket.IO Server
+    participant U as Other Users
+    participant Y as YouTube Player
+
+    H->>C: Change YouTube Video
+    C->>S: Send Video Change Event
+    S->>S: Validate Room and Permissions
+    S->>U: Broadcast Video Update
+    U->>Y: Load Shared Video
+
+    H->>C: Click Play
+    C->>S: Send Play Event
+    S->>U: Broadcast Play Event
+    U->>Y: Start Playback
+
+    H->>C: Click Pause
+    C->>S: Send Pause Event
+    S->>U: Broadcast Pause Event
+    U->>Y: Pause Playback
+```
+
+### Architecture Components
 
 | Component | Responsibility |
 |---|---|
 | `main.jsx` | Initializes the React application |
-| `App.jsx` | Manages UI, room interactions, and application state |
+| `App.jsx` | Manages the main UI, room interactions, and application state |
 | `style.css` | Handles styling and responsive design |
 | `index.js` (Backend) | Initializes Express and Socket.IO server |
 | Socket.IO Client | Connects frontend to backend |
-| Socket.IO Server | Handles real-time communication |
-| React YouTube | Embeds and controls the YouTube video player |
+| Socket.IO Server | Handles real-time communication and room broadcasting |
 | Room Management | Creates rooms and manages participants |
 | Role Management | Controls Host, Moderator, and Participant permissions |
-
-### 📡 Communication Protocol
-
-The application uses two main communication technologies.
-
-**HTTP**
-- Used for standard web communication and server access.
-- Express.js handles HTTP requests.
-
-**WebSocket / Socket.IO**
-- Used for real-time communication between connected clients.
-- Enables instant updates between users in the same room.
-- Supports room-based event broadcasting.
-- Synchronizes video playback and participant information.
-
-### ✅ Architecture Benefits
-
-- Real-time communication between multiple users.
-- Efficient room-based event broadcasting.
-- Separation of frontend and backend responsibilities.
-- Centralized role and permission management.
-- Responsive user interface.
-- Improved user experience through synchronized video playback.
-- Flexible architecture for adding future features.
+| React YouTube | Embeds and controls the YouTube video player |
 
 ## ✨ Features
 
@@ -287,7 +208,7 @@ http://localhost:5173
 
 ### 4. Install Backend Dependencies
 
-Open a second terminal and navigate to the project's `server` directory:
+Open a **second terminal** and navigate to the project's `server` directory:
 
 ```bash
 cd path/to/YouTube-Watch-Party-project/youtube-watch-party/server
@@ -362,7 +283,7 @@ The application is deployed using Render.
 - Add authentication and user profiles.
 - Improve accessibility and mobile user experience.
 
-## 👨‍💻 Author
+## 👨‍💻
 
 **Ritesh Kumar Kasaudhan**
 
